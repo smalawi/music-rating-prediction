@@ -26,11 +26,25 @@ def main():
 
   train_x = data_x
   train_y = data_y
+  
+  imp = preprocessing.Imputer(missing_values='NaN', strategy='mean', axis=0)
+
+  words = {}
+  word_array = np.genfromtxt("words.csv", delimiter=",")
+  word_array = np.delete(word_array, 0, axis=0)
+  word_array = np.delete(word_array, [2, 3, 4, 19, 20], axis=1)
+  word_array = imp.fit_transform(word_array)
+  print word_array
+  print word_array.shape
+  for word in word_array:
+    artist = word[0]
+    user = word[1]
+    words[(artist, user)] = word[2:]
+  word_array = word_array[:, 2:]
 
   users = {}
   user_array = np.genfromtxt("users.csv", delimiter=",")
   user_array = np.delete(user_array, 0, axis=0)
-  imp = preprocessing.Imputer(missing_values='NaN', strategy='mean', axis=0)
   user_array = imp.fit_transform(user_array)
   for user in user_array:
     '''info = user[8:]
@@ -44,27 +58,38 @@ def main():
   #print user_array
   user_array = user_array[:, 4:]
   train_rows = num_rows
-  train_cols = user_array.shape[1]
+  user_cols = user_array.shape[1]
+  word_cols = word_array.shape[1]
+  train_cols = user_cols + word_cols
   print train_rows, train_cols
 
-  median = np.median(user_array, axis=0)
-
+  user_median = np.median(user_array, axis=0)
+  word_median = np.median(word_array, axis=0)
+  new_line = np.empty([1, train_cols])
   x_train = np.empty([train_rows, train_cols])
   i = 0
   #print users.keys()
   for line in train_x:
+    artist = line[0]
     user = line[2]
     #print user
     if user not in users.keys():
-      x_train[i] = median
+      x_train[i, 0:user_cols] = user_median
     else:
-      x_train[i] = users[user]
+      x_train[i, 0:user_cols] = users[user]
+    if (artist, user) in words.keys():
+      x_train[i, user_cols:] = words[(artist, user)]
+    else:
+      x_train[i, user_cols:] = word_median
+    #print x_train[i]
+    if i % 1000 == 0:
+      print i
     i+=1
 
-  delete_these = np.where(np.all(x_train==median,axis=1))
+  '''delete_these = np.where(np.all(x_train==median,axis=1))
   print delete_these
   x_train = np.delete(x_train, delete_these, axis=0)
-  data_y = np.delete(data_y, delete_these, axis=0)
+  data_y = np.delete(data_y, delete_these, axis=0)'''
   #x_train = preprocessing.scale(x_train)
   
   fold_size = num_rows
@@ -73,25 +98,32 @@ def main():
   print x_train[new_fold:].shape
   print data_y[new_fold:fold_size].shape
   
-  clf = svm.SVR()
-  clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  y_predicted = clf.predict(x_train[:new_fold])
-  #clf = ensemble.GradientBoostingRegressor()
-  #est = clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  #y_predicted = est.predict(x_train[:new_fold])
+  #clf = svm.SVR()
+  #clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
+  #y_predicted = clf.predict(x_train[:new_fold])
+  
+  clf = ensemble.GradientBoostingRegressor()
+  est = clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
+  y_predicted = est.predict(x_train[:new_fold])
 
 
   #clf = linear_model.SGDRegressor(eta0=0.00001)
   #clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
   #y_predicted = clf.predict(x_train[:new_fold])
 
-  print data_y[:new_fold].shape
+  '''print data_y[:new_fold].shape
   print y_predicted.shape
   print x_train[:new_fold]
   print data_y[:new_fold]
-  print y_predicted
+  print y_predicted'''
   print metrics.mean_squared_error(data_y[:new_fold], y_predicted)
 
+  params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.01, 'loss': 'ls'}
+  clf = ensemble.GradientBoostingRegressor(**params)
+  est = clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
+  y_predicted = est.predict(x_train[:new_fold])
+  print metrics.mean_squared_error(data_y[:new_fold], y_predicted)
+  
 
 if __name__ == "__main__":
   main()
