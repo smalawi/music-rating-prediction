@@ -1,31 +1,18 @@
-#import stuff pls
-from sklearn import linear_model, preprocessing, metrics, ensemble, svm
+from sklearn import linear_model, preprocessing, metrics, ensemble, svm, tree
+from sklearn.cross_validation import cross_val_score
 import numpy as np
+import time
+import math
 
 def main():
   data_set = np.genfromtxt("train.csv", delimiter=",")
-  #print train_set
   data_set = np.delete(data_set, 0, axis=0)
   data_x = np.delete(data_set, 4, axis=1)
   data_y = data_set[:, 3]
-  #$print data_set
-  print data_x.shape
-  print data_y
 
   num_rows = data_set.shape[0]
-  '''print num_rows
-  fold_size = 4 * num_rows / 5
-  train_x = data_x[:fold_size, :]
-  train_y = data_y[:fold_size]
-  test_x = data_x[fold_size:, :]
-  test_y = data_y[fold_size:]
-  print train_x.shape
-  print train_y.shape
-  print test_x.shape
-  print test_y.shape'''
 
   train_x = data_x
-  train_y = data_y
   
   imp = preprocessing.Imputer(missing_values='NaN', strategy='mean', axis=0)
 
@@ -34,8 +21,6 @@ def main():
   word_array = np.delete(word_array, 0, axis=0)
   word_array = np.delete(word_array, [2, 3, 4, 19, 20], axis=1)
   word_array = imp.fit_transform(word_array)
-  print word_array
-  print word_array.shape
   for word in word_array:
     artist = word[0]
     user = word[1]
@@ -45,85 +30,39 @@ def main():
   users = {}
   user_array = np.genfromtxt("users.csv", delimiter=",")
   user_array = np.delete(user_array, 0, axis=0)
+  user_array = np.delete(user_array, [1, 3, 4, 5, 6, 7], axis=1)
   user_array = imp.fit_transform(user_array)
   for user in user_array:
-    '''info = user[8:]
-    nans = np.isnan(info)
-    for i in range(len(info)):
-      if nans[i]:
-        info[i] = -1
-    users[user[0]] = info'''
-    users[user[0]] = user[4:]
-    #print users[user[0]]
-  #print user_array
-  user_array = user_array[:, 4:]
+    users[user[0]] = user[1:]
+  user_array = user_array[:, 1:]
+  
   train_rows = num_rows
   user_cols = user_array.shape[1]
   word_cols = word_array.shape[1]
   train_cols = user_cols + word_cols
-  print train_rows, train_cols
 
   user_median = np.median(user_array, axis=0)
   word_median = np.median(word_array, axis=0)
+  
   new_line = np.empty([1, train_cols])
   x_train = np.empty([train_rows, train_cols])
   i = 0
-  #print users.keys()
-  for line in train_x:
+  for line in data_x:
     artist = line[0]
     user = line[2]
-    #print user
-    if user not in users.keys():
-      x_train[i, 0:user_cols] = user_median
-    else:
-      x_train[i, 0:user_cols] = users[user]
-    if (artist, user) in words.keys():
-      x_train[i, user_cols:] = words[(artist, user)]
-    else:
-      x_train[i, user_cols:] = word_median
-    #print x_train[i]
-    if i % 1000 == 0:
-      print i
-    i+=1
-
-  '''delete_these = np.where(np.all(x_train==median,axis=1))
-  print delete_these
-  x_train = np.delete(x_train, delete_these, axis=0)
-  data_y = np.delete(data_y, delete_these, axis=0)'''
-  #x_train = preprocessing.scale(x_train)
+    x_train[i, 0:user_cols] = users.get(user, user_median)
+    x_train[i, user_cols:] = words.get((artist, user), word_median)
+    i += 1
   
-  fold_size = num_rows
-  new_fold = fold_size/10
-  print x_train.shape
-  print x_train[new_fold:].shape
-  print data_y[new_fold:fold_size].shape
+  print "Feature array complete"
+
+  start = time.time()
   
-  #clf = svm.SVR()
-  #clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  #y_predicted = clf.predict(x_train[:new_fold])
+  clf = ensemble.RandomForestRegressor(n_estimators=100, max_depth = 40, max_features='log2')
+  print math.sqrt(-1*np.mean(cross_val_score(clf, x_train, data_y, scoring='mean_squared_error')))
   
-  clf = ensemble.GradientBoostingRegressor()
-  est = clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  y_predicted = est.predict(x_train[:new_fold])
-
-
-  #clf = linear_model.SGDRegressor(eta0=0.00001)
-  #clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  #y_predicted = clf.predict(x_train[:new_fold])
-
-  '''print data_y[:new_fold].shape
-  print y_predicted.shape
-  print x_train[:new_fold]
-  print data_y[:new_fold]
-  print y_predicted'''
-  print metrics.mean_squared_error(data_y[:new_fold], y_predicted)
-
-  params = {'n_estimators': 500, 'max_depth': 4, 'min_samples_split': 2, 'learning_rate': 0.01, 'loss': 'ls'}
-  clf = ensemble.GradientBoostingRegressor(**params)
-  est = clf.fit(x_train[new_fold:], data_y[new_fold:fold_size])
-  y_predicted = est.predict(x_train[:new_fold])
-  print metrics.mean_squared_error(data_y[:new_fold], y_predicted)
-  
+  end = time.time()
+  print "Time:", end - start
 
 if __name__ == "__main__":
   main()

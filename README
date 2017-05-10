@@ -1,1 +1,5 @@
-Explain how to run your code here.
+Running code:
+>> python final.py
+
+Data set: train.csv
+Feature files: users.csv, words.csv
